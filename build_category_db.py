@@ -287,8 +287,31 @@ def detect_layout(rows):
     return hdr, hier, var_cols
 
 
-def normalize_country(code, cfg, root):
-    wb = load_workbook(Path(root) / cfg["file"], read_only=True, data_only=True)
+# mots-clés pour retrouver le fichier d'un pays quel que soit son nom exact
+FILE_KEYWORDS = {
+    "FR": ["france"],
+    "UK": ["kingdom", "united", "_uk", "uk_"],
+    "DE": ["germany", "deutschland"],
+    "ES": ["spain", "espana", "españa"],
+    "IT": ["italy", "italia"],
+}
+
+
+def find_file(root, code, cfg):
+    """Trouve l'Excel d'un pays : nom exact, sinon premier .xlsx contenant un mot-clé."""
+    root = Path(root)
+    exact = root / cfg["file"]
+    if exact.exists():
+        return exact
+    for p in sorted(root.glob("*.xlsx")):
+        name = p.name.lower()
+        if any(k in name for k in FILE_KEYWORDS.get(code, [])):
+            return p
+    return None
+
+
+def normalize_country(code, cfg, path):
+    wb = load_workbook(path, read_only=True, data_only=True)
     out = []
     for sheet in wb.sheetnames:
         if sheet in cfg["skip"] or sheet not in cfg["market_map"]:
@@ -356,10 +379,12 @@ if __name__ == "__main__":
     out = sys.argv[2] if len(sys.argv) > 2 else "category_db.parquet"
     parts = []
     for c, cfg in COUNTRIES.items():
-        if not (Path(root) / cfg["file"]).exists():
-            print(f"  [skip] {c} : fichier introuvable ({cfg['file']})")
+        path = find_file(root, c, cfg)
+        if not path:
+            print(f"  [skip] {c} : aucun .xlsx trouvé (mots-clés: {FILE_KEYWORDS.get(c)})")
             continue
-        parts.append(normalize_country(c, cfg, root))
+        print(f"  [ok]   {c} : {path.name}")
+        parts.append(normalize_country(c, cfg, path))
     db = pd.concat(parts, ignore_index=True)
     db.to_parquet(out, index=False)
     print(f"OK -> {out}  ({len(db):,} lignes, {db.country.nunique()} pays)")
