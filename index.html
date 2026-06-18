@@ -665,6 +665,7 @@ const PALETTE=['#4c9aff','#3fb950','#d29922','#f85149','#a371f7','#56d4dd','#ec6
 function renderChart(rows, years, mode){
   const el=$('chart');
   if(!rows.length){ el.innerHTML=''; return; }
+  const xml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const labelCols = Object.keys(rows[0]).filter(k=>!years.map(String).includes(k));
   const labelOf = r => labelCols.map(c=>r[c]).filter(v=>v!=null).join(' · ') || '(total)';
   const top = rows.slice(0,12);
@@ -677,29 +678,37 @@ function renderChart(rows, years, mode){
     cats = top.map(labelOf);
     series = years.map((y,i)=>({name:String(y), color:PALETTE[i%PALETTE.length], vals:top.map(r=>Number(r[String(y)])||0)}));
   }
-  const W=Math.max(640, cats.length*Math.max(70, series.length*22)+120), H=320, pad={l:60,r:20,t:20,b:60};
+  const pad={l:72,r:24,t:34,b:96};
+  const barW=44, gap=10, innerGap=4;
+  const groupW=Math.max(barW*series.length + (series.length-1)*innerGap + gap*2, 90);
+  const plotW=groupW*cats.length, W=plotW+pad.l+pad.r, H=420;
   const maxV=Math.max(1, ...series.flatMap(s=>s.vals.map(v=>Math.abs(v))));
-  const plotW=W-pad.l-pad.r, plotH=H-pad.t-pad.b;
-  const groupW=plotW/cats.length, barW=Math.min(40,(groupW-10)/series.length);
-  let svg=`<svg width="${W}" height="${H}" role="img">`;
-  // y grid
-  for(let g=0; g<=4; g++){ const yv=maxV*g/4, y=pad.t+plotH-(yv/maxV*plotH);
+  const plotH=H-pad.t-pad.b;
+  let svg=`<svg width="${W}" height="${H}" role="img" font-family="inherit">`;
+  // y grid + ticks (larger)
+  for(let g=0; g<=5; g++){ const yv=maxV*g/5, y=pad.t+plotH-(yv/maxV*plotH);
     svg+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#2a3441"/>`;
-    svg+=`<text x="${pad.l-6}" y="${y+3}" text-anchor="end">${fmtNum(yv)}</text>`;
+    svg+=`<text x="${pad.l-8}" y="${y+4}" text-anchor="end" font-size="12" fill="#8b98a8">${fmtNum(yv)}</text>`;
   }
   cats.forEach((cat,ci)=>{
     const gx=pad.l+ci*groupW;
     series.forEach((s,si)=>{
-      const v=s.vals[ci], h=Math.abs(v)/maxV*plotH, x=gx+(groupW-barW*series.length)/2+si*barW, y=pad.t+plotH-h;
-      svg+=`<rect x="${x}" y="${y}" width="${barW-2}" height="${h}" fill="${s.color}"><title>${s.name} · ${cat}: ${fmtNum(v)}</title></rect>`;
+      const v=s.vals[ci], h=Math.abs(v)/maxV*plotH;
+      const x=gx+gap+si*(barW+innerGap), y=pad.t+plotH-h;
+      svg+=`<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="2" fill="${s.color}"><title>${xml(s.name)} · ${xml(cat)}: ${fmtNum(v)}</title></rect>`;
+      // value label above each bar — always visible
+      if(v!==0) svg+=`<text x="${x+barW/2}" y="${y-5}" text-anchor="middle" font-size="11" font-weight="600" fill="#e6edf3">${fmtNum(v)}</text>`;
     });
-    const lbl=String(cat).length>14?String(cat).slice(0,13)+'…':cat;
-    svg+=`<text x="${gx+groupW/2}" y="${H-pad.b+16}" text-anchor="middle">${lbl}</text>`;
+    // category label under the group (wrap long names onto 2 lines)
+    const full=String(cat), cx=gx+groupW/2;
+    const line1=full.length>16?full.slice(0,16):full, line2=full.length>16?(full.slice(16,32)+(full.length>32?'…':'')):'';
+    svg+=`<text x="${cx}" y="${H-pad.b+18}" text-anchor="middle" font-size="12" fill="#c2ccd8">${xml(line1)}</text>`;
+    if(line2) svg+=`<text x="${cx}" y="${H-pad.b+33}" text-anchor="middle" font-size="11" fill="#8b98a8">${xml(line2)}</text>`;
   });
   svg+='</svg>';
   // legend
-  let leg='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">';
-  series.forEach(s=>leg+=`<span style="font-size:11px;color:var(--muted)"><span style="display:inline-block;width:10px;height:10px;background:${s.color};border-radius:2px;margin-right:4px"></span>${s.name}</span>`);
+  let leg='<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px">';
+  series.forEach(s=>leg+=`<span style="font-size:12px;color:var(--ink)"><span style="display:inline-block;width:11px;height:11px;background:${s.color};border-radius:2px;margin-right:5px"></span>${xml(s.name)}</span>`);
   leg+='</div>';
   el.innerHTML=svg+leg;
 }
