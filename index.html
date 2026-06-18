@@ -471,10 +471,18 @@ async function boot(){
     URL.revokeObjectURL(workerUrl);
     conn = await db.connect();
 
-    setMsg('Loading category_db.parquet…');
-    const resp = await fetch('category_db.parquet');
-    if(!resp.ok) throw new Error(`fetch category_db.parquet → ${resp.status} ${resp.statusText}\n(run via a static server, not file://)`);
-    const buf = new Uint8Array(await resp.arrayBuffer());
+    let buf;
+    if (globalThis.EMBEDDED_PARQUET_B64){           // standalone double-click build
+      setMsg('Loading embedded data…');
+      const bin = atob(globalThis.EMBEDDED_PARQUET_B64);
+      buf = new Uint8Array(bin.length);
+      for (let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+    } else {                                          // served build (serve.sh)
+      setMsg('Loading category_db.parquet…');
+      const resp = await fetch('category_db.parquet');
+      if(!resp.ok) throw new Error(`fetch category_db.parquet → ${resp.status} ${resp.statusText}\n(run via a static server, not file://)`);
+      buf = new Uint8Array(await resp.arrayBuffer());
+    }
     await db.registerFileBuffer('category_db.parquet', buf);
     await conn.query(`CREATE VIEW db AS SELECT * FROM read_parquet('category_db.parquet')`);
 
