@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Category Review Explorer — Yoghurts Europe</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#171d26; --panel2:#1d2530; --line:#2a3441;
+    --ink:#e6edf3; --muted:#8b98a8; --accent:#4c9aff; --accent2:#2d7dd2;
+    --good:#3fb950; --warn:#d29922; --bad:#f85149; --chip:#243040;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink);
+  }
+  header{
+    display:flex;align-items:center;gap:16px;padding:14px 20px;
+    border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:10;
+  }
+  header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:12px}
+  header .status{margin-left:auto;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--warn);display:inline-block}
+  .dot.ok{background:var(--good)} .dot.err{background:var(--bad)}
+  .tabs{display:flex;gap:4px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .tab{padding:10px 16px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-weight:500}
+  .tab.active{color:var(--ink);border-bottom-color:var(--accent)}
+  main{padding:20px;max-width:1400px;margin:0 auto}
+  .view{display:none} .view.active{display:block}
+  .grid{display:grid;gap:16px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .panel h2{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+  label.fld{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0 0 6px}
+  select,input[type=text]{
+    width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:13px;outline:none;
+  }
+  select[multiple]{height:auto;min-height:96px}
+  select:focus,input:focus{border-color:var(--accent)}
+  .row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{
+    background:var(--chip);border:1px solid var(--line);border-radius:999px;
+    padding:5px 11px;font-size:12px;cursor:pointer;user-select:none;color:var(--muted);
+  }
+  .chip.on{background:var(--accent2);border-color:var(--accent);color:#fff}
+  .chip.disabled{opacity:.35;cursor:not-allowed}
+  button.act{
+    background:var(--accent2);color:#fff;border:1px solid var(--accent);border-radius:8px;
+    padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;
+  }
+  button.act:hover{background:var(--accent)}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px}
+  button.ghost:hover{color:var(--ink);border-color:var(--accent)}
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .badge.full{background:rgba(63,185,80,.15);color:var(--good);border:1px solid rgba(63,185,80,.35)}
+  .badge.partial{background:rgba(210,153,34,.15);color:var(--warn);border:1px solid rgba(210,153,34,.35)}
+  .badge.blocked{background:rgba(248,81,73,.15);color:var(--bad);border:1px solid rgba(248,81,73,.35)}
+  .cov-grid{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}
+  .cov-cell{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;min-width:120px}
+  .cov-cell .c-country{font-weight:700;font-size:13px}
+  .cov-cell .c-pct{font-size:16px;font-weight:700}
+  .cov-cell .c-note{color:var(--muted);font-size:11px}
+  table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{border-bottom:1px solid var(--line);padding:7px 12px;text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0;background:var(--panel)}
+  tr:hover td{background:rgba(76,154,255,.06)}
+  tr.europe td{background:rgba(76,154,255,.10);font-weight:700}
+  .tbl-wrap{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .muted{color:var(--muted)}
+  .warn-line{color:var(--warn);font-size:12px;margin:6px 0}
+  .err{color:var(--bad);font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap}
+  details.sql{margin-top:12px}
+  details.sql summary{cursor:pointer;color:var(--muted);font-size:12px}
+  pre.sql{background:#0b0e13;border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-size:12px;color:#aeb9c7}
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .kpi .card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .kpi .card .v{font-size:22px;font-weight:700} .kpi .card .l{color:var(--muted);font-size:12px}
+  .kpi .card .d{font-size:12px;margin-top:2px}
+  .up{color:var(--good)} .down{color:var(--bad)}
+  svg .bar{fill:var(--accent2)} svg text{fill:var(--muted);font-size:11px}
+  .chart-wrap{overflow-x:auto;margin-top:8px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:var(--panel2);color:var(--muted);border:none;padding:7px 12px;cursor:pointer;font-size:12px}
+  .seg button.on{background:var(--accent2);color:#fff}
+  .splash{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:100}
+  .splash .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="splash" id="splash">
+  <div class="spin"></div>
+  <div id="splash-msg" class="muted">Booting DuckDB-WASM…</div>
+  <div id="splash-err" class="err"></div>
+</div>
+
+<header>
+  <div>
+    <h1>Category Review Explorer</h1>
+    <div class="sub">Yoghurts Europe · Nielsen snapshots · EUR · read-only</div>
+  </div>
+  <div class="status"><span class="dot" id="conn-dot"></span><span id="conn-txt">connecting…</span></div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-view="builder">Builder</div>
+  <div class="tab" data-view="dash">Dashboards</div>
+</div>
+
+<main>
+  <!-- ===================== BUILDER ===================== -->
+  <section class="view active" id="view-builder">
+    <div class="grid" style="grid-template-columns:1fr;gap:16px">
+      <div class="panel">
+        <h2>1 · Scope</h2>
+        <div class="row">
+          <div>
+            <label class="fld">Countries (multi · Europe = additive rollup)</label>
+            <div class="chips" id="c-countries"></div>
+          </div>
+          <div>
+            <label class="fld">Markets</label>
+            <div class="chips" id="c-markets"></div>
+          </div>
+          <div>
+            <label class="fld">Channel</label>
+            <div class="chips" id="c-channel"></div>
+          </div>
+          <div>
+            <label class="fld">Years</label>
+            <div class="chips" id="c-years"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>2 · Breakdown &nbsp;·&nbsp; 3 · Measure</h2>
+        <div class="row">
+          <div>
+            <label class="fld">Breakdown kind</label>
+            <select id="bd-kind">
+              <option value="level">Named node level (read pre-calc)</option>
+              <option value="attribute">Attribute cross-cut (summed)</option>
+              <option value="node">Single named node (match)</option>
+            </select>
+          </div>
+          <div>
+            <label class="fld">Dimension</label>
+            <select id="bd-dim"></select>
+          </div>
+          <div id="bd-match-wrap" style="display:none">
+            <label class="fld">Match (ILIKE)</label>
+            <input type="text" id="bd-match" placeholder="e.g. LACTALIS" />
+          </div>
+          <div>
+            <label class="fld">Measure</label>
+            <select id="bd-measure"></select>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button class="act" id="run-btn">Run query</button>
+          <button class="ghost" id="csv-btn">Export CSV</button>
+          <span id="guardrail-msg"></span>
+        </div>
+      </div>
+
+      <div class="panel" id="result-panel" style="display:none">
+        <h2>Result</h2>
+        <div id="coverage-block"></div>
+        <div class="toolbar">
+          <span class="muted">Chart:</span>
+          <div class="seg" id="chart-mode">
+            <button data-mode="byyear" class="on">Year on X-axis</button>
+            <button data-mode="bydim">Breakdown on X-axis</button>
+          </div>
+        </div>
+        <div class="chart-wrap" id="chart"></div>
+        <div class="tbl-wrap" id="table"></div>
+        <details class="sql"><summary>Generated SQL</summary><pre class="sql" id="sql-out"></pre></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== DASHBOARDS ===================== -->
+  <section class="view" id="view-dash">
+    <div class="panel">
+      <h2>Dashboard controls</h2>
+      <div class="row">
+        <div><label class="fld">Dashboard</label>
+          <select id="d-which">
+            <option value="snapshot">Market snapshot</option>
+            <option value="landscape">Manufacturer landscape</option>
+            <option value="mix">Flavor &amp; format mix</option>
+            <option value="dist">Distribution &amp; rotation (node-only)</option>
+          </select>
+        </div>
+        <div><label class="fld">Country</label><select id="d-country"></select></div>
+        <div><label class="fld">Market</label><select id="d-market"></select></div>
+        <div><label class="fld">Channel</label><select id="d-channel"></select></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div><label class="fld">Year</label><select id="d-year"></select></div>
+        <div id="d-extra-wrap" style="display:none"><label class="fld" id="d-extra-lbl">Option</label><select id="d-extra"></select></div>
+        <div id="d-node-wrap" style="display:none"><label class="fld">Node match (ILIKE)</label><input type="text" id="d-node" placeholder="e.g. LACTALIS"/></div>
+        <div style="align-self:end"><button class="act" id="d-run">Refresh</button></div>
+      </div>
+    </div>
+    <div id="dash-out" style="margin-top:16px"></div>
+  </section>
+</main>
+
+<script type="module">
+import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm';
+
+/* =========================================================================
+   Static metadata — measures, aggregation rules, volume basis (TECHNICAL §3-6)
+   ========================================================================= */
+const MEASURE_LABELS = {
+  sales_value:'Sales Value (EUR)', sales_units:'Sales Units',
+  sales_vol_eq:'Volume EQ (FR)', sales_vol_kg:'Volume KG (UK/ES)',
+  sales_vol_de:'Volume GESAMT (DE)', sales_vol_it:'Volume ALL (IT)',
+  sales_value_gbp:'Sales Value (GBP, local)',
+  value_share:'Value Share %', unit_share:'Unit Share %',
+  vol_eq_share:'Volume Share % EQ', vol_kg_share:'Volume Share % KG',
+  vol_de_share:'Volume Share % GESAMT', vol_it_share:'Volume Share % ALL',
+  avg_price_unit:'Avg Price / Unit (EUR)', avg_price_kg:'Avg Price / KG (EUR)',
+  avg_price_eq:'Avg Price / EQ (EUR)', avg_price_vol:'Avg Price / Volume (EUR)',
+  sales_value_yoy:'Value YoY %', sales_units_yoy:'Units YoY %',
+  value_share_chg:'Value Share Δ', unit_share_chg:'Unit Share Δ',
+  dn:'Numeric Distribution', dv:'Weighted Distribution',
+  ros_value:'ROS Value', ros_vol:'ROS Volume', ros_units:'ROS Units',
+};
+// numerator additive for derived "share" measures (denominator = market total)
+const SHARE_NUM = {
+  value_share:'sales_value', unit_share:'sales_units',
+  vol_eq_share:'sales_vol_eq', vol_kg_share:'sales_vol_kg',
+  vol_de_share:'sales_vol_de', vol_it_share:'sales_vol_it',
+};
+// numerator/denominator additives for derived "price" (ratio) measures
+const PRICE_ND = {
+  avg_price_unit:['sales_value','sales_units'],
+  avg_price_kg:['sales_value','sales_vol_kg'],
+  avg_price_eq:['sales_value','sales_vol_eq'],
+  // avg_price_vol covers DE (GESAMT) & IT (ALL); each country carries only its own volume var
+  avg_price_vol:['sales_value','sales_vol_de'], // den augmented per-country at build time
+};
+// basis-restricted measures -> allowed countries (TECHNICAL §6). null = pan-European.
+const MEASURE_BASIS = {
+  sales_vol_eq:['FR'], vol_eq_share:['FR'], avg_price_eq:['FR'],
+  sales_vol_kg:['UK','ES'], vol_kg_share:['UK','ES'], avg_price_kg:['UK','ES'],
+  sales_vol_de:['DE'], vol_de_share:['DE'],
+  sales_vol_it:['IT'], vol_it_share:['IT'],
+  avg_price_vol:['DE','IT'], // single-country only (mixed bases meaningless)
+};
+const ALL_COUNTRIES = ['FR','UK','DE','ES','IT'];
+// breakdown dimension -> {col, level}
+const DIM_DEF = {
+  manufacturer:{col:'manufacturer', level:'manufacturer'},
+  brand:{col:'brand', level:'brand'},
+  segment:{col:'segment', level:'segment'},
+  flavor:{col:'flavor_en', level:'flavor'},
+  weight:{col:'weight', level:'weight'},
+  multipack:{col:'multipack', level:'multipack'},
+  bio:{col:'bio', level:'bio'},
+};
+const LEVEL_DIMS = ['manufacturer','brand','segment'];      // named-node breakdowns
+const ATTR_DIMS  = ['flavor','weight','multipack','bio'];   // attribute cross-cuts
+
+/* =========================================================================
+   buildQuery — pure function: selections -> { sql, needsCoverage,
+   volumeBlocked, coverageSql }   (TECHNICAL §8)
+   ========================================================================= */
+function qIn(arr){ return arr.map(v=>`'${String(v).replace(/'/g,"''")}'`).join(','); }
+
+function measureType(measure){
+  if (measure in SHARE_NUM) return 'share';
+  if (measure in PRICE_ND)  return 'price';
+  // node_only measures
+  if (/_yoy$|_chg$/.test(measure) || ['dn','dv','ros_value','ros_vol','ros_units'].includes(measure))
+    return 'node_only';
+  return 'additive';
+}
+
+function checkVolumeBlocked(measure, countries){
+  const basis = MEASURE_BASIS[measure];
+  if (!basis) return false;
+  const hasEurope = countries.includes('Europe');
+  const real = countries.filter(c=>c!=='Europe');
+  if (hasEurope) return true;                              // Europe spans incompatible bases
+  if (real.some(c=>!basis.includes(c))) return true;       // a country outside the basis
+  if (measure==='avg_price_vol' && real.length>1) return true; // DE & IT not comparable
+  return false;
+}
+
+function buildQuery(sel){
+  const { countries, markets, channel, breakdown, measure, years } = sel;
+  const hasEurope = countries.includes('Europe');
+  const real = countries.filter(c=>c!=='Europe');
+  const scopeCountries = hasEurope ? ALL_COUNTRIES : real;
+  const type = measureType(measure);
+  const volumeBlocked = checkVolumeBlocked(measure, countries);
+
+  // breakdown resolution
+  let dimCol=null, levelFilter=null, matchFilter='';
+  if (breakdown.kind==='node'){
+    const d = DIM_DEF[breakdown.value] || DIM_DEF.manufacturer;
+    levelFilter = d.level;
+    matchFilter = ` AND ${d.col} ILIKE '%${String(breakdown.match||'').replace(/'/g,"''")}%'`;
+    dimCol = null; // single node, no dimension column
+  } else {
+    const d = DIM_DEF[breakdown.value];
+    dimCol = d.col; levelFilter = d.level;
+  }
+  const needsCoverage = breakdown.kind==='attribute';
+
+  const sortYear = Math.max(...years);
+  const yearCol = y => `"${y}"`;
+  // does the table carry a country column? (multi-country detail or Europe rollup)
+  const showCountry = real.length>1 || hasEurope || type==='node_only' && real.length>1;
+  const detailCountries = real;
+
+  const baseWhere = (cset)=>`market IN (${qIn(markets)}) AND channel='${channel}'`
+      + (cset.length?` AND country IN (${qIn(cset)})`:'');
+
+  // ---- helper: assemble a CTE with detail rows + optional Europe rollup ----
+  function unioned(selectDetail, selectEurope){
+    const parts=[];
+    if (detailCountries.length) parts.push(selectDetail(detailCountries));
+    if (hasEurope && selectEurope) parts.push(selectEurope(ALL_COUNTRIES));
+    return parts.join('\n  UNION ALL\n  ');
+  }
+
+  let sql;
+  const groupKeys = [ showCountry?'country':null, dimCol ].filter(Boolean);
+  const labelSelect = [ showCountry?'country':null, dimCol ].filter(Boolean).join(', ') || `'(total)' AS label`;
+
+  if (type==='additive'){
+    const yrs = years.map(y=>`SUM(v) FILTER (WHERE year=${y}) AS ${yearCol(y)}`).join(',\n         ');
+    const cte = unioned(
+      cs=>`SELECT country${dimCol?`, ${dimCol}`:''}, year, SUM(value) AS v
+       FROM db WHERE ${baseWhere(cs)} AND level='${levelFilter}' AND variable='${measure}'${matchFilter}
+       GROUP BY country${dimCol?`, ${dimCol}`:''}, year`,
+      cs=>`SELECT 'Europe' AS country${dimCol?`, ${dimCol}`:''}, year, SUM(value) AS v
+       FROM db WHERE ${baseWhere(cs)} AND level='${levelFilter}' AND variable='${measure}'${matchFilter}
+       GROUP BY ${dimCol?`${dimCol}, `:''}year`
+    );
+    sql = `WITH m AS (\n  ${cte}\n)
+SELECT ${labelSelect},
+         ${yrs}
+FROM m
+GROUP BY ${groupKeys.length?groupKeys.join(', '):'1'}
+ORDER BY ${groupKeys.length? `${yearCol(sortYear)} DESC`:'1'};`;
+  }
+
+  else if (type==='share'){
+    const num = SHARE_NUM[measure];
+    const numCte = unioned(
+      cs=>`SELECT country${dimCol?`, ${dimCol}`:''}, year, SUM(value) AS n
+       FROM db WHERE ${baseWhere(cs)} AND level='${levelFilter}' AND variable='${num}'${matchFilter}
+       GROUP BY country${dimCol?`, ${dimCol}`:''}, year`,
+      cs=>`SELECT 'Europe' AS country${dimCol?`, ${dimCol}`:''}, year, SUM(value) AS n
+       FROM db WHERE ${baseWhere(cs)} AND level='${levelFilter}' AND variable='${num}'${matchFilter}
+       GROUP BY ${dimCol?`${dimCol}, `:''}year`
+    );
+    // denominator = robust market total at manufacturer level (TECHNICAL §4)
+    const denCte = unioned(
+      cs=>`SELECT country, year, SUM(value) AS d
+       FROM db WHERE ${baseWhere(cs)} AND level='manufacturer' AND variable='${num}'
+       GROUP BY country, year`,
+      cs=>`SELECT 'Europe' AS country, year, SUM(value) AS d
+       FROM db WHERE ${baseWhere(cs)} AND level='manufacturer' AND variable='${num}'
+       GROUP BY year`
+    );
+    const yrs = years.map(y=>
+      `SUM(n) FILTER (WHERE year=${y}) / NULLIF(SUM(d) FILTER (WHERE year=${y}),0) AS ${yearCol(y)}`
+    ).join(',\n         ');
+    sql = `WITH num AS (\n  ${numCte}\n), den AS (\n  ${denCte}\n),
+joined AS (SELECT num.country${dimCol?`, num.${dimCol}`:''}, num.year, num.n, den.d
+           FROM num JOIN den USING(country, year))
+SELECT ${labelSelect},
+         ${yrs}
+FROM joined
+GROUP BY ${groupKeys.length?groupKeys.join(', '):'1'}
+ORDER BY ${groupKeys.length? `${yearCol(sortYear)} DESC`:'1'};`;
+  }
+
+  else if (type==='price'){
+    let [numV,denV] = PRICE_ND[measure];
+    // avg_price_vol: pull both DE & IT volumes; each country carries only one
+    const denVars = measure==='avg_price_vol' ? ['sales_vol_de','sales_vol_it'] : [denV];
+    const vlist = qIn([numV, ...denVars]);
+    const cte = unioned(
+      cs=>`SELECT country${dimCol?`, ${dimCol}`:''}, year,
+            SUM(value) FILTER (WHERE variable='${numV}') AS num,
+            SUM(value) FILTER (WHERE variable IN (${qIn(denVars)})) AS den
+       FROM db WHERE ${baseWhere(cs)} AND level='${levelFilter}' AND variable IN (${vlist})${matchFilter}
+       GROUP BY country${dimCol?`, ${dimCol}`:''}, year`,
+      cs=>`SELECT 'Europe' AS country${dimCol?`, ${dimCol}`:''}, year,
+            SUM(value) FILTER (WHERE variable='${numV}') AS num,
+            SUM(value) FILTER (WHERE variable IN (${qIn(denVars)})) AS den
+       FROM db WHERE ${baseWhere(cs)} AND level='${levelFilter}' AND variable IN (${vlist})${matchFilter}
+       GROUP BY ${dimCol?`${dimCol}, `:''}year`
+    );
+    const yrs = years.map(y=>
+      `SUM(num) FILTER (WHERE year=${y}) / NULLIF(SUM(den) FILTER (WHERE year=${y}),0) AS ${yearCol(y)}`
+    ).join(',\n         ');
+    sql = `WITH m AS (\n  ${cte}\n)
+SELECT ${labelSelect},
+         ${yrs}
+FROM m
+GROUP BY ${groupKeys.length?groupKeys.join(', '):'1'}
+ORDER BY ${groupKeys.length? `${yearCol(sortYear)} DESC`:'1'};`;
+  }
+
+  else { // node_only — read raw values, never aggregated (TECHNICAL §5)
+    const gk = [ detailCountries.length>1?'country':null ].filter(Boolean);
+    const lbl = gk.length? gk.join(', ') : (detailCountries.length===1?`'${detailCountries[0]}' AS country`:`'(node)' AS label`);
+    const yrs = years.map(y=>`AVG(value) FILTER (WHERE year=${y}) AS ${yearCol(y)}`).join(',\n         ');
+    sql = `SELECT ${lbl},
+         ${yrs}
+FROM db
+WHERE ${baseWhere(detailCountries)} AND level='${levelFilter}' AND variable='${measure}'${matchFilter}
+GROUP BY ${gk.length?gk.join(', '):'1'}
+ORDER BY 1;`;
+  }
+
+  // ---- coverage query (attribute cross-cuts only) — per country (TECHNICAL §4)
+  let coverageSql=null;
+  if (needsCoverage){
+    const cs = scopeCountries;
+    coverageSql = `WITH ref AS (
+  SELECT country, SUM(value) AS market_total FROM db
+  WHERE ${baseWhere(cs)} AND level='manufacturer' AND variable='sales_value' AND year=${sortYear}
+  GROUP BY country),
+attr AS (
+  SELECT country, SUM(value) AS detailed, BOOL_OR(mdd_detailed) AS mdd_detailed FROM db
+  WHERE ${baseWhere(cs)} AND level='${levelFilter}' AND variable='sales_value' AND year=${sortYear}
+  GROUP BY country)
+SELECT a.country, a.detailed, r.market_total,
+       a.detailed / NULLIF(r.market_total,0) AS coverage, a.mdd_detailed
+FROM ref r JOIN attr a USING(country) ORDER BY coverage;`;
+  }
+
+  return { sql, needsCoverage, volumeBlocked, coverageSql };
+}
+window.buildQuery = buildQuery; // exposed for console testing
+
+/* =========================================================================
+   DuckDB-WASM bootstrap (TECHNICAL §9)
+   ========================================================================= */
+let conn=null, META={};
+async function boot(){
+  const setMsg=t=>document.getElementById('splash-msg').textContent=t;
+  try{
+    setMsg('Selecting DuckDB bundle…');
+    const bundles = duckdb.getJsDelivrBundles();
+    const bundle  = await duckdb.selectBundle(bundles);
+    const workerUrl = URL.createObjectURL(new Blob(
+      [`importScripts("${bundle.mainWorker}");`], {type:'text/javascript'}));
+    const worker = new Worker(workerUrl);
+    const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    URL.revokeObjectURL(workerUrl);
+    conn = await db.connect();
+
+    setMsg('Loading category_db.parquet…');
+    const resp = await fetch('category_db.parquet');
+    if(!resp.ok) throw new Error(`fetch category_db.parquet → ${resp.status} ${resp.statusText}\n(run via a static server, not file://)`);
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    await db.registerFileBuffer('category_db.parquet', buf);
+    await conn.query(`CREATE VIEW db AS SELECT * FROM read_parquet('category_db.parquet')`);
+
+    setMsg('Reading metadata…');
+    await loadMeta();
+    document.getElementById('conn-dot').className='dot ok';
+    document.getElementById('conn-txt').textContent=`ready · ${META.rows.toLocaleString()} rows`;
+    document.getElementById('splash').style.display='none';
+    initUI();
+  }catch(e){
+    document.getElementById('conn-dot').className='dot err';
+    document.getElementById('conn-txt').textContent='error';
+    document.getElementById('splash-err').textContent=String(e.message||e);
+    document.getElementById('splash-msg').textContent='Failed to initialize.';
+  }
+}
+
+async function q(sql){ const r=await conn.query(sql); return r.toArray().map(row=>row.toJSON()); }
+
+async function loadMeta(){
+  const [cnt] = await q(`SELECT count(*) AS n FROM db`);
+  META.rows = Number(cnt.n);
+  META.countries = (await q(`SELECT DISTINCT country FROM db ORDER BY country`)).map(r=>r.country);
+  META.markets   = (await q(`SELECT DISTINCT market FROM db ORDER BY market`)).map(r=>r.market);
+  META.channels  = (await q(`SELECT DISTINCT channel FROM db ORDER BY channel`)).map(r=>r.channel);
+  META.years     = (await q(`SELECT DISTINCT year FROM db ORDER BY year`)).map(r=>Number(r.year));
+  META.measures  = (await q(`SELECT DISTINCT variable, var_family, agg_rule FROM db ORDER BY variable`));
+}
+
+/* =========================================================================
+   UI helpers
+   ========================================================================= */
+const $ = id => document.getElementById(id);
+function chip(text, on=false){ const c=document.createElement('span'); c.className='chip'+(on?' on':''); c.textContent=text; return c; }
+function selOpts(elId, vals, fmt=(v=>v)){
+  const s=$(elId); s.innerHTML=''; vals.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=fmt(v); s.appendChild(o); });
+}
+
+// tab switching
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); $('view-'+t.dataset.view).classList.add('active');
+}));
+
+/* ---- builder state ---- */
+const STATE = { countries:new Set(['FR']), markets:new Set(['YALG']), channel:'Total', years:new Set() };
+
+function renderChips(){
+  // countries (+ Europe)
+  const cc=$('c-countries'); cc.innerHTML='';
+  ['Europe',...META.countries].forEach(v=>{
+    const c=chip(v, STATE.countries.has(v));
+    c.onclick=()=>{ STATE.countries.has(v)?STATE.countries.delete(v):STATE.countries.add(v); if(!STATE.countries.size)STATE.countries.add(v); renderChips(); refreshMeasures(); };
+    cc.appendChild(c);
+  });
+  const mc=$('c-markets'); mc.innerHTML='';
+  META.markets.forEach(v=>{ const c=chip(v,STATE.markets.has(v)); c.onclick=()=>{ STATE.markets.has(v)?STATE.markets.delete(v):STATE.markets.add(v); if(!STATE.markets.size)STATE.markets.add(v); renderChips(); }; mc.appendChild(c); });
+  const ch=$('c-channel'); ch.innerHTML='';
+  META.channels.forEach(v=>{ const c=chip(v,STATE.channel===v); c.onclick=()=>{ STATE.channel=v; renderChips(); }; ch.appendChild(c); });
+  const yc=$('c-years'); yc.innerHTML='';
+  META.years.forEach(v=>{ const c=chip(v,STATE.years.has(v)); c.onclick=()=>{ STATE.years.has(v)?STATE.years.delete(v):STATE.years.add(v); if(!STATE.years.size)STATE.years.add(v); renderChips(); }; yc.appendChild(c); });
+}
+
+function currentDims(){ return $('bd-kind').value==='attribute'?ATTR_DIMS:LEVEL_DIMS; }
+function refreshDims(){
+  const kind=$('bd-kind').value;
+  $('bd-match-wrap').style.display = kind==='node'?'block':'none';
+  const dims = kind==='attribute'?ATTR_DIMS:LEVEL_DIMS;
+  selOpts('bd-dim', dims, d=>d.charAt(0).toUpperCase()+d.slice(1));
+  refreshMeasures();
+}
+function refreshMeasures(){
+  // available measures from data, filtered by node_only-applicability + labelled
+  const kind=$('bd-kind').value;
+  const countries=[...STATE.countries];
+  const opts = META.measures.map(m=>m.variable)
+    .filter(v=>v in MEASURE_LABELS)               // known/labelled
+    .filter(v=>{                                   // node_only only for single-node breakdown
+      const t=measureType(v);
+      if(t==='node_only') return kind==='node';
+      return true;
+    });
+  const sel=$('bd-measure'); const prev=sel.value; sel.innerHTML='';
+  opts.forEach(v=>{
+    const blocked=checkVolumeBlocked(v, countries);
+    const o=document.createElement('option'); o.value=v;
+    o.textContent=MEASURE_LABELS[v]+(blocked?' — blocked for scope':'');
+    o.disabled=blocked; sel.appendChild(o);
+  });
+  if([...sel.options].some(o=>o.value===prev && !o.disabled)) sel.value=prev;
+}
+
+function getSelections(){
+  return {
+    countries:[...STATE.countries],
+    markets:[...STATE.markets],
+    channel:STATE.channel,
+    breakdown: $('bd-kind').value==='node'
+      ? {kind:'node', value:$('bd-dim').value, level:DIM_DEF[$('bd-dim').value].level, match:$('bd-match').value}
+      : {kind:$('bd-kind').value, value:$('bd-dim').value, level:DIM_DEF[$('bd-dim').value].level},
+    measure:$('bd-measure').value,
+    years:[...STATE.years].sort(),
+  };
+}
+
+let LAST_ROWS=[], LAST_YEARS=[];
+async function runBuilder(){
+  const sel=getSelections();
+  if(!sel.measure){ alert('No measure available for this scope.'); return; }
+  const { sql, needsCoverage, volumeBlocked, coverageSql } = buildQuery(sel);
+  $('sql-out').textContent = sql + (coverageSql?('\n\n-- coverage --\n'+coverageSql):'');
+  $('result-panel').style.display='block';
+
+  if(volumeBlocked){
+    $('coverage-block').innerHTML=`<span class="badge blocked">⚠ volume blocked — incompatible bases for this scope</span>
+      <div class="warn-line">Pick countries sharing one volume basis (KG: UK/ES · EQ: FR · GESAMT: DE · ALL: IT), or use Value / Units.</div>`;
+    $('table').innerHTML=''; $('chart').innerHTML=''; LAST_ROWS=[]; return;
+  }
+  try{
+    const rows = await q(sql);
+    LAST_ROWS = rows; LAST_YEARS = sel.years;
+    renderTable(rows, sel.years);
+    renderChart(rows, sel.years, $('#chart-mode .on')?.dataset.mode || 'byyear');
+    if(needsCoverage){ renderCoverage(await q(coverageSql)); }
+    else { $('coverage-block').innerHTML=''; }
+  }catch(e){
+    $('table').innerHTML=`<div class="err">${e.message||e}</div>`; $('chart').innerHTML='';
+  }
+}
+
+function fmtNum(v){
+  if(v==null) return '—';
+  const n=Number(v);
+  if(!isFinite(n)) return '—';
+  if(Math.abs(n)<1 && n!==0) return (n*100).toFixed(1)+'%'; // shares
+  if(Math.abs(n)>=1e6) return (n/1e6).toFixed(2)+'M';
+  if(Math.abs(n)>=1e3) return (n/1e3).toFixed(1)+'k';
+  return n.toFixed(2);
+}
+
+function renderTable(rows, years){
+  if(!rows.length){ $('table').innerHTML='<div class="muted" style="padding:14px">No rows.</div>'; return; }
+  const labelCols = Object.keys(rows[0]).filter(k=>!years.map(String).includes(k));
+  let h='<table><thead><tr>';
+  labelCols.forEach(c=>h+=`<th>${c}</th>`);
+  years.forEach(y=>h+=`<th>${y}</th>`);
+  h+='</tr></thead><tbody>';
+  rows.forEach(r=>{
+    const eu = labelCols.some(c=>String(r[c])==='Europe');
+    h+=`<tr class="${eu?'europe':''}">`;
+    labelCols.forEach(c=>h+=`<td>${r[c]??'—'}</td>`);
+    years.forEach(y=>h+=`<td>${fmtNum(r[String(y)])}</td>`);
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  $('table').innerHTML=h;
+}
+
+function renderCoverage(rows){
+  if(!rows.length){ $('coverage-block').innerHTML=''; return; }
+  const worst = Math.min(...rows.map(r=>Number(r.coverage)||0));
+  const overall = worst>=0.999
+    ? `<span class="badge full">✓ full coverage</span>`
+    : `<span class="badge partial">partial — excludes MDD / undetailed</span>`;
+  let cells='';
+  rows.forEach(r=>{
+    const pct=(Number(r.coverage)*100);
+    const note = r.mdd_detailed ? 'gap = undetailed only' : 'MDD excluded';
+    cells+=`<div class="cov-cell"><div class="c-country">${r.country}</div>
+      <div class="c-pct ${pct>=99.9?'up':''}">${isFinite(pct)?pct.toFixed(0):'—'}%</div>
+      <div class="c-note">${note}</div></div>`;
+  });
+  $('coverage-block').innerHTML=`<div>${overall} <span class="muted" style="font-size:12px">— coverage is per-country, computed at the cross-cut's own level vs the manufacturer-level market total. Never aggregated to one Europe figure.</span></div>
+    <div class="cov-grid">${cells}</div>`;
+}
+
+/* ---- minimal dependency-free SVG charts ---- */
+const PALETTE=['#4c9aff','#3fb950','#d29922','#f85149','#a371f7','#56d4dd','#ec6cb9','#e3b341'];
+function renderChart(rows, years, mode){
+  const el=$('chart');
+  if(!rows.length){ el.innerHTML=''; return; }
+  const labelCols = Object.keys(rows[0]).filter(k=>!years.map(String).includes(k));
+  const labelOf = r => labelCols.map(c=>r[c]).filter(v=>v!=null).join(' · ') || '(total)';
+  const top = rows.slice(0,12);
+  // categories (x) and series depend on mode
+  let cats, series; // series: [{name, color, vals:[per cat]}]
+  if(mode==='byyear'){
+    cats = years.map(String);
+    series = top.map((r,i)=>({name:labelOf(r), color:PALETTE[i%PALETTE.length], vals:years.map(y=>Number(r[String(y)])||0)}));
+  } else {
+    cats = top.map(labelOf);
+    series = years.map((y,i)=>({name:String(y), color:PALETTE[i%PALETTE.length], vals:top.map(r=>Number(r[String(y)])||0)}));
+  }
+  const W=Math.max(640, cats.length*Math.max(70, series.length*22)+120), H=320, pad={l:60,r:20,t:20,b:60};
+  const maxV=Math.max(1, ...series.flatMap(s=>s.vals.map(v=>Math.abs(v))));
+  const plotW=W-pad.l-pad.r, plotH=H-pad.t-pad.b;
+  const groupW=plotW/cats.length, barW=Math.min(40,(groupW-10)/series.length);
+  let svg=`<svg width="${W}" height="${H}" role="img">`;
+  // y grid
+  for(let g=0; g<=4; g++){ const yv=maxV*g/4, y=pad.t+plotH-(yv/maxV*plotH);
+    svg+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#2a3441"/>`;
+    svg+=`<text x="${pad.l-6}" y="${y+3}" text-anchor="end">${fmtNum(yv)}</text>`;
+  }
+  cats.forEach((cat,ci)=>{
+    const gx=pad.l+ci*groupW;
+    series.forEach((s,si)=>{
+      const v=s.vals[ci], h=Math.abs(v)/maxV*plotH, x=gx+(groupW-barW*series.length)/2+si*barW, y=pad.t+plotH-h;
+      svg+=`<rect x="${x}" y="${y}" width="${barW-2}" height="${h}" fill="${s.color}"><title>${s.name} · ${cat}: ${fmtNum(v)}</title></rect>`;
+    });
+    const lbl=String(cat).length>14?String(cat).slice(0,13)+'…':cat;
+    svg+=`<text x="${gx+groupW/2}" y="${H-pad.b+16}" text-anchor="middle">${lbl}</text>`;
+  });
+  svg+='</svg>';
+  // legend
+  let leg='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">';
+  series.forEach(s=>leg+=`<span style="font-size:11px;color:var(--muted)"><span style="display:inline-block;width:10px;height:10px;background:${s.color};border-radius:2px;margin-right:4px"></span>${s.name}</span>`);
+  leg+='</div>';
+  el.innerHTML=svg+leg;
+}
+document.querySelectorAll('#chart-mode button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#chart-mode button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  if(LAST_ROWS.length) renderChart(LAST_ROWS, LAST_YEARS, b.dataset.mode);
+}));
+
+function exportCSV(){
+  if(!LAST_ROWS.length){ alert('Run a query first.'); return; }
+  const cols=Object.keys(LAST_ROWS[0]);
+  const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const csv=[cols.join(',')].concat(LAST_ROWS.map(r=>cols.map(c=>esc(r[c])).join(','))).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='category_export.csv'; a.click();
+}
+
+/* =========================================================================
+   Dashboards (PRD §5.1)
+   ========================================================================= */
+async function runDash(){
+  const which=$('d-which').value, country=$('d-country').value, market=$('d-market').value,
+        channel=$('d-channel').value, year=Number($('d-year').value), out=$('dash-out');
+  const isEU = country==='Europe';
+  const cset = isEU?ALL_COUNTRIES:[country];
+  const where = `market='${market}' AND channel='${channel}' AND country IN (${qIn(cset)})`;
+  out.innerHTML='<div class="muted">Loading…</div>';
+  try{
+    if(which==='snapshot'){
+      const [tot] = await q(`SELECT SUM(value) v FROM db WHERE ${where} AND level='manufacturer' AND variable='sales_value' AND year=${year}`);
+      const prev = year-1;
+      const [totp] = await q(`SELECT SUM(value) v FROM db WHERE ${where} AND level='manufacturer' AND variable='sales_value' AND year=${prev}`);
+      const [mdd] = await q(`SELECT SUM(value) v FROM db WHERE ${where} AND level='manufacturer' AND is_mdd AND variable='sales_value' AND year=${year}`);
+      const chan = await q(`SELECT channel, SUM(value) v FROM db WHERE market='${market}' AND country IN (${qIn(cset)}) AND level='manufacturer' AND variable='sales_value' AND year=${year} GROUP BY channel ORDER BY v DESC`);
+      const top = await q(`SELECT manufacturer, SUM(value) v FROM db WHERE ${where} AND level='manufacturer' AND variable='sales_value' AND year=${year} GROUP BY manufacturer ORDER BY v DESC LIMIT 10`);
+      const size=Number(tot?.v||0), sizep=Number(totp?.v||0);
+      const yoy = sizep? (size/sizep-1)*100 : null;
+      const mddShare = size? Number(mdd?.v||0)/size*100 : null;
+      out.innerHTML=`
+        <div class="panel"><h2>Market snapshot — ${country} · ${market} · ${channel} · ${year}</h2>
+          <div class="kpi">
+            <div class="card"><div class="l">Market size (value)</div><div class="v">€${fmtNum(size)}</div></div>
+            <div class="card"><div class="l">Growth YoY</div><div class="v ${yoy>=0?'up':'down'}">${yoy==null?'—':(yoy>=0?'+':'')+yoy.toFixed(1)+'%'}</div></div>
+            <div class="card"><div class="l">MDD value share</div><div class="v">${mddShare==null?'—':mddShare.toFixed(1)+'%'}</div></div>
+            <div class="card"><div class="l">Channels (value)</div><div class="d">${chan.map(c=>`${c.channel}: €${fmtNum(c.v)}`).join('<br>')}</div></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:16px"><h2>Top 10 manufacturers (value)</h2>
+          ${tableFrom(top.map(r=>({Manufacturer:r.manufacturer, Value:'€'+fmtNum(r.v), Share:(Number(r.v)/size*100).toFixed(1)+'%'})))}
+        </div>`;
+    }
+    else if(which==='landscape'){
+      const rows = await q(`SELECT manufacturer,
+          SUM(value) FILTER (WHERE year=${Math.min(...META.years)}) AS y0,
+          SUM(value) FILTER (WHERE year=${year}) AS y1
+        FROM db WHERE ${where.replace(`AND year=${year}`,'')} AND level='manufacturer' AND variable='sales_value'
+        GROUP BY manufacturer ORDER BY y1 DESC LIMIT 15`);
+      const totY1 = rows.reduce((a,r)=>a+Number(r.y1||0),0);
+      out.innerHTML=`<div class="panel"><h2>Manufacturer landscape — ${country} · ${market} · ${channel}</h2>
+        ${tableFrom(rows.map(r=>({Manufacturer:r.manufacturer,
+          [`Value ${Math.min(...META.years)}`]:'€'+fmtNum(r.y0),
+          [`Value ${year}`]:'€'+fmtNum(r.y1),
+          ['Share '+year]:(totY1?(Number(r.y1)/totY1*100).toFixed(1):'—')+'%',
+          'Growth':r.y0?(((Number(r.y1)/Number(r.y0)-1)*100).toFixed(1)+'%'):'—'})))}
+        <div class="warn-line">Shares recomputed from summed additive value (never averaged).</div></div>`;
+    }
+    else if(which==='mix'){
+      const dim=$('d-extra').value; // flavor|weight|multipack|bio
+      const d=DIM_DEF[dim];
+      const sel={countries:isEU?['Europe']:[country], markets:[market], channel,
+        breakdown:{kind:'attribute',value:dim,level:d.level}, measure:'sales_value', years:[year]};
+      const {sql,coverageSql}=buildQuery(sel);
+      const rows=await q(sql); const cov=await q(coverageSql);
+      out.innerHTML=`<div class="panel"><h2>${dim[0].toUpperCase()+dim.slice(1)} mix — ${country} · ${market} · ${channel} · ${year}</h2>
+        <div id="dash-cov"></div>
+        ${tableFrom(rows.map(r=>{const o={};Object.keys(r).forEach(k=>o[k]= k==String(year)?'€'+fmtNum(r[k]):r[k]);return o;}))}</div>`;
+      const tmp=$('coverage-block'); // reuse renderer into dash
+      const save=tmp.innerHTML; renderCoverage(cov); $('dash-cov').innerHTML=tmp.innerHTML; tmp.innerHTML=save;
+    }
+    else if(which==='dist'){
+      const node=$('d-node').value.trim();
+      if(!node){ out.innerHTML='<div class="panel warn-line">Enter a node match (e.g. a manufacturer name).</div>'; return; }
+      const vars=['dn','dv','ros_value','ros_vol','ros_units'];
+      const rows=await q(`SELECT variable,
+          AVG(value) FILTER (WHERE year=${year}) v
+        FROM db WHERE ${where} AND level='manufacturer' AND manufacturer ILIKE '%${node.replace(/'/g,"''")}%'
+          AND variable IN (${qIn(vars)}) GROUP BY variable`);
+      out.innerHTML=`<div class="panel"><h2>Distribution &amp; rotation — “${node}” · ${country} · ${market} · ${channel} · ${year}</h2>
+        <div class="warn-line">node-only metrics — shown for a single node, never aggregated.</div>
+        ${tableFrom(rows.map(r=>({Metric:MEASURE_LABELS[r.variable]||r.variable, Value:fmtNum(r.v)})))}</div>`;
+    }
+  }catch(e){ out.innerHTML=`<div class="panel err">${e.message||e}</div>`; }
+}
+function tableFrom(rows){
+  if(!rows.length) return '<div class="muted">No rows.</div>';
+  const cols=Object.keys(rows[0]);
+  let h='<div class="tbl-wrap"><table><thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>';
+  rows.forEach(r=>h+='<tr>'+cols.map(c=>`<td>${r[c]??'—'}</td>`).join('')+'</tr>');
+  return h+'</tbody></table></div>';
+}
+function syncDashControls(){
+  const which=$('d-which').value;
+  $('d-extra-wrap').style.display = which==='mix'?'block':'none';
+  $('d-node-wrap').style.display = which==='dist'?'block':'none';
+  if(which==='mix'){ $('d-extra-lbl').textContent='Attribute'; selOpts('d-extra',ATTR_DIMS,d=>d[0].toUpperCase()+d.slice(1)); }
+}
+
+/* =========================================================================
+   init
+   ========================================================================= */
+function initUI(){
+  // years default: all
+  META.years.forEach(y=>STATE.years.add(y));
+  renderChips();
+  refreshDims();
+  $('bd-kind').addEventListener('change', refreshDims);
+  $('bd-dim').addEventListener('change', refreshMeasures);
+  $('run-btn').addEventListener('click', runBuilder);
+  $('csv-btn').addEventListener('click', exportCSV);
+
+  // dashboards
+  selOpts('d-country', ['Europe',...META.countries]);
+  selOpts('d-market', META.markets);
+  selOpts('d-channel', META.channels);
+  selOpts('d-year', [...META.years].reverse());
+  $('d-which').addEventListener('change', ()=>{ syncDashControls(); });
+  $('d-run').addEventListener('click', runDash);
+  syncDashControls();
+}
+
+boot();
+</script>
+</body>
+</html>

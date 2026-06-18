@@ -1,0 +1,6 @@
+category_db.parquet
+*.parquet
+__pycache__/
+*.pyc
+flavor_proposals.json
+.DS_Store
