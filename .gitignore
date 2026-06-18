@@ -4,3 +4,11 @@ __pycache__/
 *.pyc
 flavor_proposals.json
 .DS_Store
+
+# confidential source data — never commit
+excels/
+*.xlsx
+
+# generated standalone build (regenerate via build_standalone.py)
+category_explorer_standalone.html
+*_standalone.html
