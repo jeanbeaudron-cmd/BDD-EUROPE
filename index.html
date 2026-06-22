@@ -263,6 +263,7 @@ const MEASURE_BASIS = {
 const ALL_COUNTRIES = ['FR','UK','DE','ES','IT'];
 // breakdown dimension -> {col, level}
 const DIM_DEF = {
+  manufacturer_group:{col:'manufacturer_group', level:'manufacturer'},
   manufacturer:{col:'manufacturer', level:'manufacturer'},
   brand:{col:'brand', level:'brand'},
   segment:{col:'segment', level:'segment'},
@@ -271,8 +272,12 @@ const DIM_DEF = {
   multipack:{col:'multipack', level:'multipack'},
   bio:{col:'bio', level:'bio'},
 };
-const LEVEL_DIMS = ['manufacturer','brand','segment'];      // named-node breakdowns
+const LEVEL_DIMS = ['manufacturer_group','manufacturer','brand','segment']; // named-node breakdowns
 const ATTR_DIMS  = ['flavor','weight','multipack','bio'];   // attribute cross-cuts
+const DIM_LABELS = {manufacturer_group:'Manufacturer group (MDD unified)',
+  manufacturer:'Manufacturer', brand:'Brand', segment:'Segment',
+  flavor:'Flavor', weight:'Weight', multipack:'Multipack', bio:'Bio'};
+const dimLabel = d => DIM_LABELS[d] || (d.charAt(0).toUpperCase()+d.slice(1));
 
 /* =========================================================================
    buildQuery — pure function: selections -> { sql, needsCoverage,
@@ -552,7 +557,7 @@ function refreshDims(){
   const kind=$('bd-kind').value;
   $('bd-match-wrap').style.display = kind==='node'?'block':'none';
   const dims = kind==='attribute'?ATTR_DIMS:LEVEL_DIMS;
-  selOpts('bd-dim', dims, d=>d.charAt(0).toUpperCase()+d.slice(1));
+  selOpts('bd-dim', dims, dimLabel);
   refreshMeasures();
 }
 function refreshMeasures(){

@@ -350,8 +350,11 @@ def normalize_country(code, cfg, path):
             flavor = cfg["flavor_map"].get(str(raw_fl).strip().upper(),
                                            str(raw_fl).title()) if raw_fl is not None else None
             depth_rank = ROLE_DEPTH.index(role) if role in ROLE_DEPTH else -1
+            # cross-country group: unify all private-label tokens under one label
+            manuf_group = "Private Label" if is_mdd else manuf
             base = dict(country=code, channel=channel, market=market, level=level,
                         depth=depth_rank, is_mdd=is_mdd, manufacturer=manuf,
+                        manufacturer_group=manuf_group,
                         brand=cell("brand"), segment=cell("segment"), flavor_en=flavor,
                         weight=cell("weight"), multipack=cell("multipack"),
                         bio=cell("bio"), ean=cell("ean"))
