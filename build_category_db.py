@@ -50,8 +50,119 @@ ROLE_SYNONYMS = {
 ROLE_DEPTH = ["family", "category", "manufacturer", "brand", "segment",
               "multipack", "weight", "bio", "flavor", "ean"]
 
-# --- Variables (libellé local -> code, famille, règle d'agrégation) -----------
-# additive = sommable | derived = recalcul depuis additives | node_only = jamais sommé
+# --- Harmonisation parfums : libellé local (toute langue) -> parfum de BASE ----
+# On scanne les jetons du libellé et on retient le parfum du PREMIER jeton reconnu
+# (= parfum principal). Les composés retombent donc sur leur parfum dominant.
+# (stem en MAJUSCULES sans accent ; on teste token.startswith(stem))
+FLAVOR_STEMS = [
+    ("ERDBEER", "Strawberry"), ("FRAISE", "Strawberry"), ("FRAGOL", "Strawberry"),
+    ("FRESA", "Strawberry"), ("STRAWBERR", "Strawberry"),
+    ("HIMBEER", "Raspberry"), ("FRAMBOIS", "Raspberry"), ("LAMPON", "Raspberry"),
+    ("FRAMBUES", "Raspberry"), ("RASPBERR", "Raspberry"),
+    ("HEIDELBEER", "Blueberry"), ("BLAUBEER", "Blueberry"), ("MYRTILL", "Blueberry"),
+    ("MIRTILL", "Blueberry"), ("ARANDAN", "Blueberry"), ("BLUEBERR", "Blueberry"),
+    ("BROMBEER", "Blackberry"), ("BLACKBERR", "Blackberry"), ("MURE", "Blackberry"),
+    ("MUR", "Blackberry"), ("MORA", "Blackberry"), ("MORE", "Blackberry"),
+    ("KIRSCH", "Cherry"), ("CERISE", "Cherry"), ("CILIEG", "Cherry"),
+    ("CEREZA", "Cherry"), ("CHERR", "Cherry"),
+    ("CRANBERR", "Cranberry"), ("KRANBEER", "Cranberry"),
+    ("JOHANNISB", "Currant"), ("CASSIS", "Currant"), ("GROSEILL", "Currant"),
+    ("RIBES", "Currant"), ("BLACKCURRANT", "Currant"), ("CURRANT", "Currant"),
+    ("VANILL", "Vanilla"), ("VANIGL", "Vanilla"), ("VAINILL", "Vanilla"),
+    ("BOURBON", "Vanilla"), ("VANILLA", "Vanilla"),
+    ("ZITRON", "Lemon"), ("CITRON", "Lemon"), ("LIMON", "Lemon"), ("LEMON", "Lemon"),
+    ("CITRIC", "Lemon"), ("CITRUS", "Lemon"),
+    ("LIMETT", "Lime"), ("LIME", "Lime"),
+    ("KOKOS", "Coconut"), ("COCO", "Coconut"), ("COCCO", "Coconut"), ("COCONUT", "Coconut"),
+    ("PFIRSICH", "Peach"), ("PECHE", "Peach"), ("PESCA", "Peach"),
+    ("MELOCOT", "Peach"), ("PEACH", "Peach"),
+    ("APRIKOS", "Apricot"), ("ABRICOT", "Apricot"), ("ALBICOCC", "Apricot"),
+    ("ALBARICOQ", "Apricot"), ("APRICOT", "Apricot"),
+    ("MANGO", "Mango"), ("MANGUE", "Mango"),
+    ("ANANAS", "Pineapple"), ("PINEAPPLE", "Pineapple"), ("PINA", "Pineapple"),
+    ("MARACUJA", "Passion Fruit"), ("PASSION", "Passion Fruit"), ("PASION", "Passion Fruit"),
+    ("BLUTORANGE", "Orange"), ("BLUTOR", "Orange"), ("ORANGE", "Orange"),
+    ("ARANCI", "Orange"), ("NARANJA", "Orange"),
+    ("MANDARIN", "Mandarin"), ("CLEMENTIN", "Mandarin"),
+    ("BANAN", "Banana"), ("PLATAN", "Banana"),
+    ("BRATAPFEL", "Apple"), ("GRUENAPFEL", "Apple"), ("APFEL", "Apple"), ("POMME", "Apple"),
+    ("MELA", "Apple"), ("MANZAN", "Apple"), ("APPLE", "Apple"),
+    ("BIRNE", "Pear"), ("POIRE", "Pear"), ("PERA", "Pear"), ("PEAR", "Pear"),
+    ("FEIGE", "Fig"), ("FIGUE", "Fig"), ("FICO", "Fig"), ("FICH", "Fig"),
+    ("HIGO", "Fig"), ("FIG", "Fig"),
+    ("PFLAUME", "Plum"), ("CIRUELA", "Plum"), ("PRUGNA", "Plum"), ("PLUM", "Plum"),
+    ("MARRON", "Chestnut"), ("MARONI", "Chestnut"), ("KASTANIE", "Chestnut"),
+    ("CASTAN", "Chestnut"), ("CHESTNUT", "Chestnut"),
+    ("RHABARBER", "Rhubarb"), ("RHUBARB", "Rhubarb"), ("RUIBARBO", "Rhubarb"),
+    ("RABARBAR", "Rhubarb"),
+    ("GINGER", "Ginger"), ("INGWER", "Ginger"), ("JENGIBRE", "Ginger"), ("ZENZERO", "Ginger"),
+    ("TZATZIK", "Tzatziki"), ("ZAZIK", "Tzatziki"),
+    ("DATTEL", "Date"), ("DATIL", "Date"), ("DATTER", "Date"),
+    ("GRANATAPFEL", "Pomegranate"), ("GRENADE", "Pomegranate"), ("MELOGRAN", "Pomegranate"),
+    ("GRANAD", "Pomegranate"), ("POMEGRAN", "Pomegranate"),
+    ("KIWI", "Kiwi"),
+    ("TRAUBE", "Grape"), ("RAISIN", "Grape"), ("UVA", "Grape"), ("GRAPE", "Grape"),
+    ("LITSCHI", "Lychee"), ("LYCHEE", "Lychee"), ("LICHI", "Lychee"),
+    ("STRACCIATELL", "Stracciatella"),
+    ("SCHOKO", "Chocolate"), ("CHOCOLAT", "Chocolate"), ("CHOCO", "Chocolate"),
+    ("CIOCCOLAT", "Chocolate"), ("CHOCOLATE", "Chocolate"), ("CACAO", "Chocolate"),
+    ("KAKAO", "Chocolate"),
+    ("KAFFEE", "Coffee"), ("CAFE", "Coffee"), ("CAFFE", "Coffee"), ("COFFEE", "Coffee"),
+    ("KARAMELL", "Caramel"), ("CARAMEL", "Caramel"), ("TOFFEE", "Caramel"),
+    ("HONIG", "Honey"), ("MIEL", "Honey"), ("HONEY", "Honey"),
+    ("WALNUSS", "Walnut"), ("NOIX", "Walnut"), ("NOCE", "Walnut"), ("NOCI", "Walnut"),
+    ("NUEZ", "Walnut"), ("NUECES", "Walnut"), ("WALNUT", "Walnut"),
+    ("HASELN", "Hazelnut"), ("NOISETT", "Hazelnut"), ("NOCCIOL", "Hazelnut"),
+    ("AVELLAN", "Hazelnut"), ("HAZELNUT", "Hazelnut"),
+    ("PISTAZ", "Pistachio"), ("PISTACH", "Pistachio"), ("PISTACC", "Pistachio"),
+    ("MANDEL", "Almond"), ("AMANDE", "Almond"), ("MANDORL", "Almond"),
+    ("ALMENDR", "Almond"), ("ALMOND", "Almond"),
+    ("MUESLI", "Muesli"), ("MUSLI", "Muesli"), ("CEREAL", "Muesli"), ("GRANOLA", "Muesli"),
+    ("BIRCHER", "Muesli"), ("HAFER", "Muesli"), ("AVENA", "Muesli"),
+    ("TIRAMISU", "Tiramisu"),
+    ("CHEESECAKE", "Cheesecake"), ("KASEKUCHEN", "Cheesecake"),
+    ("SACHER", "Sachertorte"),
+    ("BEERENMIX", "Mixed Berries"), ("BEEREN", "Mixed Berries"), ("WALDFRUCHT", "Mixed Berries"),
+    ("FRUTTI", "Mixed Berries"), ("FRUTOS", "Mixed Berries"),
+    ("BOSCO", "Mixed Berries"),
+    ("MACEDONIA", "Mixed Fruit"), ("MULTIFRU", "Mixed Fruit"), ("MISCHUNG", "Mixed Fruit"),
+    ("FRUCHT", "Mixed Fruit"), ("FRUTTA", "Mixed Fruit"), ("FRUTAS", "Mixed Fruit"),
+    ("MIXED", "Mixed Fruit"), ("MIX", "Mixed Fruit"), ("ASSORT", "Mixed Fruit"),
+]
+PLAIN_STEMS = ("NATUR", "PLAIN", "CLASSIC", "CLASSICO", "GRECO", "GRIEG", "GREEK",
+               "GREGO", "CREMA", "CREME", "CREMOS", "CREMIG", "CREAM", "PANNA",
+               "SAHNE", "STD", "PUR", "STICHFEST", "MILD", "ORIGINAL")
+UNSWEET = ("NO AZUCAR", "SIN AZUCAR", "UNSWEETEN", "OHNE ZUCKER", "SENZA ZUCCHERO",
+           "SANS SUCRE", "0 AZUCAR")
+SWEET = ("AZUCAR", "SWEETEN", "ZUCKER", "ZUCCHER", "SUCRE", "SUGAR")
+
+
+def _strip_accents(s):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", s)
+                   if unicodedata.category(c) != "Mn")
+
+
+def base_flavor(raw):
+    """Local flavor label (any language) -> canonical base flavor (primary note)."""
+    s = _strip_accents(str(raw)).upper()
+    s = re.sub(r"[^A-Z0-9]+", " ", s).strip()
+    if not s:
+        return None
+    tokens = s.split()
+    for tok in tokens:                              # primary = first recognised token
+        for stem, fl in FLAVOR_STEMS:
+            if tok.startswith(stem):
+                return fl
+    if any(p in s for p in UNSWEET):                # plain, no fruit, kept distinct
+        return "Unsweetened Plain"
+    if any(p in s for p in SWEET):
+        return "Sweetened Plain"
+    if any(tok.startswith(p) for tok in tokens for p in PLAIN_STEMS):
+        return "Plain"
+    return None                                     # unresolved (caller falls back)
+
+
 VARIABLE_MAP = {
     # France (valeurs déjà en EUR)
     "Ventes Valeur": ("sales_value", "value", "additive"),
@@ -347,8 +458,10 @@ def normalize_country(code, cfg, path):
             exact = cfg.get("mdd_exact", len(tok) < 4)
             is_mdd = (up == tok) if exact else (tok in up)
             raw_fl = cell("flavor")
-            flavor = cfg["flavor_map"].get(str(raw_fl).strip().upper(),
-                                           str(raw_fl).title()) if raw_fl is not None else None
+            # base-flavor (primary note) first; curated map for the rest; else cleaned label
+            flavor = (base_flavor(raw_fl)
+                      or cfg["flavor_map"].get(str(raw_fl).strip().upper())
+                      or str(raw_fl).strip().title()) if raw_fl is not None else None
             depth_rank = ROLE_DEPTH.index(role) if role in ROLE_DEPTH else -1
             # cross-country group: unify all private-label tokens under one label
             manuf_group = "Private Label" if is_mdd else manuf
