@@ -147,9 +147,9 @@
           <div>
             <label class="fld">Breakdown kind</label>
             <select id="bd-kind">
-              <option value="level">Named node level (read pre-calc)</option>
-              <option value="attribute">Attribute cross-cut (summed)</option>
-              <option value="node">Single named node (match)</option>
+              <option value="level">All nodes of a level (e.g. every manufacturer)</option>
+              <option value="attribute">Attribute cross-cut, summed (flavor / format / bio)</option>
+              <option value="node">One single node (pick e.g. LACTALIS only)</option>
             </select>
           </div>
           <div>
@@ -157,8 +157,9 @@
             <select id="bd-dim"></select>
           </div>
           <div id="bd-match-wrap" style="display:none">
-            <label class="fld">Match (ILIKE)</label>
-            <input type="text" id="bd-match" placeholder="e.g. LACTALIS" />
+            <label class="fld">Pick a node (type to search)</label>
+            <input type="text" id="bd-match" list="bd-match-list" placeholder="start typing…" autocomplete="off" />
+            <datalist id="bd-match-list"></datalist>
           </div>
           <div>
             <label class="fld">Measure</label>
@@ -169,6 +170,14 @@
           <button class="act" id="run-btn">Run query</button>
           <button class="ghost" id="csv-btn">Export CSV</button>
           <span id="guardrail-msg"></span>
+        </div>
+        <div class="toolbar" style="border-top:1px solid var(--line);padding-top:10px">
+          <span class="muted" style="font-size:12px">One-click presets (use current scope &amp; years):</span>
+          <button class="ghost preset" data-preset="topman">Top manufacturers</button>
+          <button class="ghost preset" data-preset="plshare">Private Label share</button>
+          <button class="ghost preset" data-preset="flavor">Flavor mix</button>
+          <button class="ghost preset" data-preset="format">Format mix</button>
+          <button class="ghost preset" data-preset="brand">Top brands</button>
         </div>
       </div>
 
@@ -209,7 +218,7 @@
       <div class="row" style="margin-top:12px">
         <div><label class="fld">Year</label><select id="d-year"></select></div>
         <div id="d-extra-wrap" style="display:none"><label class="fld" id="d-extra-lbl">Option</label><select id="d-extra"></select></div>
-        <div id="d-node-wrap" style="display:none"><label class="fld">Node match (ILIKE)</label><input type="text" id="d-node" placeholder="e.g. LACTALIS"/></div>
+        <div id="d-node-wrap" style="display:none"><label class="fld">Pick a manufacturer (type to search)</label><input type="text" id="d-node" list="d-node-list" autocomplete="off" placeholder="start typing…"/><datalist id="d-node-list"></datalist></div>
         <div style="align-self:end"><button class="act" id="d-run">Refresh</button></div>
       </div>
     </div>
@@ -550,6 +559,7 @@ function renderChips(){
   META.channels.forEach(v=>{ const c=chip(v,STATE.channel===v); c.onclick=()=>{ STATE.channel=v; renderChips(); }; ch.appendChild(c); });
   const yc=$('c-years'); yc.innerHTML='';
   META.years.forEach(v=>{ const c=chip(v,STATE.years.has(v)); c.onclick=()=>{ STATE.years.has(v)?STATE.years.delete(v):STATE.years.add(v); if(!STATE.years.size)STATE.years.add(v); renderChips(); }; yc.appendChild(c); });
+  refreshNodeOptions(); // cheap no-op unless in 'node' mode
 }
 
 function currentDims(){ return $('bd-kind').value==='attribute'?ATTR_DIMS:LEVEL_DIMS; }
@@ -559,6 +569,28 @@ function refreshDims(){
   const dims = kind==='attribute'?ATTR_DIMS:LEVEL_DIMS;
   selOpts('bd-dim', dims, dimLabel);
   refreshMeasures();
+  if(kind==='node') refreshNodeOptions();
+}
+// populate the node picker (datalist) with the real values present for the scope
+let _nodeReqId=0;
+async function refreshNodeOptions(){
+  if($('bd-kind').value!=='node') return;
+  const dim=$('bd-dim').value, d=DIM_DEF[dim];
+  const cs=[...STATE.countries].filter(c=>c!=='Europe');
+  const scope=[...STATE.countries].includes('Europe')?ALL_COUNTRIES:cs;
+  if(!scope.length){ return; }
+  const sql=`SELECT DISTINCT ${d.col} AS v FROM db
+    WHERE market IN (${qIn([...STATE.markets])}) AND channel='${STATE.channel}'
+      AND level='${d.level}' AND ${d.col} IS NOT NULL
+    ORDER BY 1 LIMIT 1000`;
+  const myId=++_nodeReqId;
+  try{
+    const rows=await q(sql);
+    if(myId!==_nodeReqId) return;                 // a newer request superseded this one
+    const dl=$('bd-match-list'); dl.innerHTML='';
+    rows.forEach(r=>{ const o=document.createElement('option'); o.value=r.v; dl.appendChild(o); });
+    $('bd-match').placeholder = rows.length? `${rows.length} available — type to search` : 'no nodes for this scope';
+  }catch(e){ /* ignore */ }
 }
 function refreshMeasures(){
   // available measures from data, filtered by node_only-applicability + labelled
@@ -594,6 +626,22 @@ function getSelections(){
   };
 }
 
+const PRESETS = {
+  topman:{kind:'level',dim:'manufacturer',measure:'sales_value'},
+  plshare:{kind:'level',dim:'manufacturer_group',measure:'value_share'},
+  flavor:{kind:'attribute',dim:'flavor',measure:'sales_value'},
+  format:{kind:'attribute',dim:'weight',measure:'sales_value'},
+  brand:{kind:'level',dim:'brand',measure:'sales_value'},
+};
+function applyPreset(p){
+  const c=PRESETS[p]; if(!c) return;
+  $('bd-kind').value=c.kind; refreshDims();          // rebuild dim + measure lists
+  $('bd-dim').value=c.dim; refreshMeasures();
+  const opt=[...$('bd-measure').options].find(o=>o.value===c.measure && !o.disabled);
+  if(opt) $('bd-measure').value=c.measure;
+  runBuilder();
+}
+
 let LAST_ROWS=[], LAST_YEARS=[];
 async function runBuilder(){
   const sel=getSelections();
@@ -610,6 +658,15 @@ async function runBuilder(){
   try{
     const rows = await q(sql);
     LAST_ROWS = rows; LAST_YEARS = sel.years;
+    if(!rows.length){
+      const dimTxt = sel.breakdown.value;
+      $('coverage-block').innerHTML=`<span class="badge partial">no data for this breakdown in this scope</span>
+        <div class="warn-line">“${dimLabel(dimTxt)}” returns nothing for the selected market/country/channel.
+        This usually means the source file doesn't carry that level there — e.g. <b>Kefir has no “segment” detail in DE / ES / UK</b>
+        (only FR &amp; IT do), and some attributes aren't broken out in every country. Try another breakdown or country.</div>`;
+      $('table').innerHTML=''; $('chart').innerHTML='';
+      return;
+    }
     renderTable(rows, sel.years);
     renderChart(rows, sel.years, $('#chart-mode .on')?.dataset.mode || 'byyear');
     if(needsCoverage){ renderCoverage(await q(coverageSql)); }
@@ -816,11 +873,21 @@ function tableFrom(rows){
   rows.forEach(r=>h+='<tr>'+cols.map(c=>`<td>${r[c]??'—'}</td>`).join('')+'</tr>');
   return h+'</tbody></table></div>';
 }
-function syncDashControls(){
+async function syncDashControls(){
   const which=$('d-which').value;
   $('d-extra-wrap').style.display = which==='mix'?'block':'none';
   $('d-node-wrap').style.display = which==='dist'?'block':'none';
   if(which==='mix'){ $('d-extra-lbl').textContent='Attribute'; selOpts('d-extra',ATTR_DIMS,d=>d[0].toUpperCase()+d.slice(1)); }
+  if(which==='dist'){
+    const c=$('d-country').value, cs=c==='Europe'?ALL_COUNTRIES:[c];
+    try{
+      const rows=await q(`SELECT DISTINCT manufacturer AS v FROM db
+        WHERE market='${$('d-market').value}' AND channel='${$('d-channel').value}'
+          AND country IN (${qIn(cs)}) AND level='manufacturer' AND manufacturer IS NOT NULL ORDER BY 1 LIMIT 1000`);
+      const dl=$('d-node-list'); dl.innerHTML='';
+      rows.forEach(r=>{ const o=document.createElement('option'); o.value=r.v; dl.appendChild(o); });
+    }catch(e){}
+  }
 }
 
 /* =========================================================================
@@ -832,9 +899,10 @@ function initUI(){
   renderChips();
   refreshDims();
   $('bd-kind').addEventListener('change', refreshDims);
-  $('bd-dim').addEventListener('change', refreshMeasures);
+  $('bd-dim').addEventListener('change', ()=>{ refreshMeasures(); refreshNodeOptions(); });
   $('run-btn').addEventListener('click', runBuilder);
   $('csv-btn').addEventListener('click', exportCSV);
+  document.querySelectorAll('.preset').forEach(b=>b.addEventListener('click', ()=>applyPreset(b.dataset.preset)));
 
   // dashboards
   selOpts('d-country', ['Europe',...META.countries]);
@@ -842,6 +910,7 @@ function initUI(){
   selOpts('d-channel', META.channels);
   selOpts('d-year', [...META.years].reverse());
   $('d-which').addEventListener('change', ()=>{ syncDashControls(); });
+  ['d-country','d-market','d-channel'].forEach(id=>$(id).addEventListener('change', ()=>{ if($('d-which').value==='dist') syncDashControls(); }));
   $('d-run').addEventListener('click', runDash);
   syncDashControls();
 }
